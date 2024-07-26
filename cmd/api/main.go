@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -15,18 +14,6 @@ func WriteJSON(w http.ResponseWriter, status int, data any) error {
 	w.Header().Add("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	return json.NewEncoder(w).Encode(data)
-}
-
-type apiFunc func(http.ResponseWriter, *http.Request) error
-
-func makeHTTPHandlerFunc(f apiFunc) http.HandlerFunc {
-
-	return func(w http.ResponseWriter, r *http.Request) {
-		err := f(w, r)
-		if err != nil {
-			WriteJSON(w, http.StatusBadRequest, ApiError{err.Error()})
-		}
-	}
 }
 
 type config struct {
@@ -57,7 +44,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer pgstore.db.Close(context.Background())
+	defer pgstore.db.Close()
 
 	app.store = pgstore
 	err = app.store.Init()

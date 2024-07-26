@@ -1,12 +1,11 @@
 package main
 
 import (
-	"context"
+	"database/sql"
+	"errors"
 	"fmt"
-	"time"
 
 	"github.com/arian-nj/site/back/internal/data"
-	"github.com/jackc/pgx/v5"
 	"github.com/lib/pq"
 )
 
@@ -14,22 +13,23 @@ type storage interface {
 	Init() error
 	InsertMovie(*data.Movie) error
 	GetMovieById(int64) (*data.Movie, error)
-	DeleteMovie(int) error
+	Update(movie *data.Movie) error
+	DeleteMovie(int64) error
 }
 
 type PostgresStorage struct {
-	db *pgx.Conn
+	db *sql.DB
 }
 
 func NewPostgresStorage() (*PostgresStorage, error) {
 	connStr := "postgres://postgres:secret@localhost:5432/postgres?sslmode=disable"
-	conn, err := pgx.Connect(context.Background(), connStr)
+	conn, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return &PostgresStorage{}, fmt.Errorf("unable to connect to database: %v", err)
 	}
 	// defer conn.Close(context.Background())
 
-	err = conn.Ping(context.Background())
+	err = conn.Ping()
 	if err != nil {
 		return &PostgresStorage{}, err
 	}
@@ -43,7 +43,7 @@ func (s *PostgresStorage) Init() error {
 }
 
 func (s *PostgresStorage) CreateMovieTable() error {
-	tx, err := s.db.Begin(context.Background())
+	tx, err := s.db.Begin()
 	if err != nil {
 		return err
 	}
@@ -57,65 +57,102 @@ func (s *PostgresStorage) CreateMovieTable() error {
 		version integer NOT NULL DEFAULT 1
 		);`
 
-	_, err = s.db.Exec(context.Background(), query)
+	_, err = s.db.Exec(query)
 	if err != nil {
 		return err
 	}
-	err = tx.Commit(context.Background())
+	err = tx.Commit()
 	return err
 }
 
 func (s *PostgresStorage) InsertMovie(movie *data.Movie) error {
 	fmt.Println("making ", movie.Title, " in db")
 	statment := `INSERT INTO movies 
-	(created_at,title,year,runtime,genres,version)
+	(title,year,runtime,genres)
 	VALUES 
-	($1,$2,$3,$4,$5,$6)
+	($1,$2,$3,$4) 
+	RETURNING id, created_at, version
 	`
-
-	rows, err := s.db.Exec(context.Background(), statment,
-		time.Now().UTC(),
+	args := []interface{}{
 		movie.Title,
 		movie.Year,
 		movie.Runtime,
 		pq.Array(movie.Genres),
-		movie.Version)
-	fmt.Printf("%+v", rows)
-	return err
+	}
+
+	return s.db.QueryRow(statment, args...).Scan(&movie.ID, &movie.CreatedAt, &movie.Version)
 }
 
 func (s *PostgresStorage) GetMovieById(id int64) (*data.Movie, error) {
+	if id < 1 {
+		return nil, data.ErrRecordNotFound
+	}
+	query := `
+	SELECT id, created_at, title, year, runtime, genres, version
+	FROM movies
+	WHERE id = $1`
 	var movie data.Movie
-	err := s.db.QueryRow(context.Background(), "SELECT * FROM movies WHERE id = $1", id).Scan(
+
+	err := s.db.QueryRow(query, id).Scan(
 		&movie.ID,
 		&movie.CreatedAt,
 		&movie.Title,
 		&movie.Year,
 		&movie.Runtime,
-		&movie.Genres,
+		pq.Array(&movie.Genres),
 		&movie.Version,
 	)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, data.ErrRecordNotFound
+		default:
 			return nil, err
 		}
-		return nil, err
 	}
+	// Otherwise, return a pointer to the Movie struct.
 	return &movie, nil
 }
 
 func (s *PostgresStorage) Update(movie *data.Movie) error {
-	// query := `UPDATE movies
-	// SET title = $1, year = $2, runtime = $3, genres = $4, version = version + 1
-	// WHERE id = $5
-	// RETURNING version`
-	// err := s.db.QueryRow(context.Background(),
-	// query, movie.Title, movie.Year, movie.Runtime, movie.Genres, movie.Version,)
-	return nil
+	query := `
+	UPDATE movies
+	SET title = $1, year = $2, runtime = $3, genres = $4, version =
+	version + 1
+	WHERE id = $5
+	RETURNING version`
+	args := []interface{}{
+		movie.Title,
+		movie.Year,
+		movie.Runtime,
+		pq.Array(movie.Genres),
+		movie.ID,
+	}
+
+	return s.db.QueryRow(query, args...).Scan(&movie.Version)
 }
 
-func (s *PostgresStorage) DeleteMovie(id int) error {
-	// _, err := s.db.Query("delete FROM movie where id = $1", id)
-	err := fmt.Errorf("s")
-	return err
+func (s *PostgresStorage) DeleteMovie(id int64) error {
+	if id < 1 {
+		return data.ErrRecordNotFound
+	}
+	query := `
+	DELETE FROM movies
+	WHERE id = $1`
+
+	result, err := s.db.Exec(query, id)
+	if err != nil {
+		return err
+	}
+
+	rowsEffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rowsEffected == 0 {
+		return data.ErrRecordNotFound
+	}
+
+	return nil
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -10,26 +9,28 @@ import (
 	"github.com/arian-nj/site/back/internal/validator"
 )
 
-func (app *application) healthcheckHandler(w http.ResponseWriter, r *http.Request) error {
+func (app *application) healthcheckHandler(w http.ResponseWriter, r *http.Request) {
 	data := map[string]string{
 		"status":      "available",
 		"environment": app.config.env,
 		"version":     version,
 	}
 	WriteJSON(w, http.StatusOK, data)
-	return nil
 }
 
-func (app *application) createMovieHandler(w http.ResponseWriter, r *http.Request) error {
-	var input struct {
-		Title   string       `json:"title"`
-		Year    int32        `json:"year"`
-		Runtime data.Runtime `json:"runtime"`
-		Genres  []string     `json:"genres"`
-	}
+type inputMovie struct {
+	Title   string       `json:"title"`
+	Year    int32        `json:"year"`
+	Runtime data.Runtime `json:"runtime"`
+	Genres  []string     `json:"genres"`
+}
+
+func (app *application) createMovieHandler(w http.ResponseWriter, r *http.Request) {
+	var input inputMovie
 	err := app.readJSON(w, r, &input)
 	if err != nil {
-		return WriteJSON(w, http.StatusBadRequest, ApiError{Error: err.Error()})
+		app.badRequestResponse(w, err)
+		return
 	}
 
 	v := validator.New()
@@ -42,39 +43,119 @@ func (app *application) createMovieHandler(w http.ResponseWriter, r *http.Reques
 
 	data.ValidateMovie(v, movie)
 	if !v.Valid() {
-		app.failedValidationResponse(w, r, v.Errors)
-		return nil
+		app.failedValidationResponse(w, v.Errors)
+		return
 	}
 
 	err = app.store.InsertMovie(movie)
 	if err != nil {
-		return err
+		app.serverErrorResponse(w)
+		app.logger.Println(err)
+		return
 	}
-	WriteJSON(w, http.StatusOK, input)
-	return nil
+	err = WriteJSON(w, http.StatusOK, input)
+	if err != nil {
+		app.serverErrorResponse(w)
+	}
 }
 
-func (app *application) getMovieHandler(w http.ResponseWriter, r *http.Request) error {
-	id, err := GetId(r)
+func (app *application) getMovieHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := readParamId(r)
 	if err != nil {
-		return WriteJSON(w, http.StatusNotFound, ApiError{Error: err.Error()})
-
+		app.CustomErrResponse(w, http.StatusNotFound, err)
+		return
 	}
 
 	movie, err := app.store.GetMovieById(id)
 	if err != nil {
-		return fmt.Errorf("movie by id #%d does not exist", id)
+		app.notFoundResponse(w)
+		return
 	}
-	WriteJSON(w, http.StatusOK, envelope{"movie": movie})
-	// fmt.Fprintf(w, "Get Movie #%d", id)
-	return nil
+
+	err = WriteJSON(w, http.StatusOK, envelope{"movie": movie})
+	if err != nil {
+		app.serverErrorResponse(w)
+	}
 }
 
-func GetId(r *http.Request) (int64, error) {
+func readParamId(r *http.Request) (int64, error) {
 	strId := r.PathValue("id")
 	id, err := strconv.ParseInt(strId, 10, 64)
 	if err != nil {
 		return 0, errors.New("invalid id parameter")
 	}
 	return id, err
+}
+
+func (app *application) updateMovieHandler(w http.ResponseWriter, r *http.Request) {
+	var input inputMovie
+	id, err := readParamId(r)
+	if err != nil {
+		app.CustomErrResponse(w, http.StatusBadGateway, err)
+		return
+	}
+
+	movie, err := app.store.GetMovieById(id)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			app.notFoundResponse(w)
+		} else {
+			app.serverErrorResponse(w)
+		}
+		return
+	}
+
+	err = app.readJSON(w, r, &input)
+	if err != nil {
+		app.badRequestResponse(w, err)
+		return
+	}
+
+	movie.Title = input.Title
+	movie.Year = input.Year
+	movie.Runtime = input.Runtime
+	movie.Genres = input.Genres
+
+	v := validator.New()
+
+	data.ValidateMovie(v, movie)
+	if !v.Valid() {
+		app.failedValidationResponse(w, v.Errors)
+		return
+	}
+
+	err = app.store.Update(movie)
+	if err != nil {
+		app.serverErrorResponse(w)
+		app.logger.Println(err)
+		return
+	}
+
+	err = WriteJSON(w, http.StatusOK, envelope{"movie": movie})
+	if err != nil {
+		app.serverErrorResponse(w)
+	}
+
+}
+func (app *application) deleteMovieHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := readParamId(r)
+	if err != nil {
+		app.CustomErrResponse(w, http.StatusNotFound, err)
+		return
+	}
+	err = app.store.DeleteMovie(id)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			app.notFoundResponse(w)
+		} else {
+			app.serverErrorResponse(w)
+		}
+		return
+	}
+
+	err = WriteJSON(w, http.StatusOK, envelope{"message": "movie successfully deleted"})
+	if err != nil {
+		app.serverErrorResponse(w)
+	}
+
 }
