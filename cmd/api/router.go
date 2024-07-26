@@ -8,7 +8,7 @@ func (app *application) makeRouter() *http.ServeMux {
 	router.HandleFunc("GET /v1/healthcheck", app.healthcheckHandler)
 	router.HandleFunc("POST /v1/movies", app.createMovieHandler)
 	router.HandleFunc("GET /v1/movies/{id}", app.getMovieHandler)
-	router.HandleFunc("PUT /v1/movies/{id}", app.updateMovieHandler)
+	router.HandleFunc("PATCH /v1/movies/{id}", app.updateMovieHandler)
 	router.HandleFunc("DELETE /v1/movies/{id}", app.deleteMovieHandler)
 	return router
 }

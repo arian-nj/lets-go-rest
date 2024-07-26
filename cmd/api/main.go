@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/arian-nj/site/back/internal/data"
 )
 
 func WriteJSON(w http.ResponseWriter, status int, data any) error {
@@ -24,7 +26,7 @@ type config struct {
 type application struct {
 	config config
 	logger *log.Logger
-	store  storage
+	models *data.Models
 }
 
 const version = "1.0.0"
@@ -40,17 +42,11 @@ func main() {
 		config: cfg,
 	}
 
-	pgstore, err := NewPostgresStorage()
+	models, err := data.NewModels()
 	if err != nil {
-		log.Fatal(err)
+		app.logger.Panic(err)
 	}
-	defer pgstore.db.Close()
-
-	app.store = pgstore
-	err = app.store.Init()
-	if err != nil {
-		log.Fatal(err)
-	}
+	app.models = models
 
 	router := app.makeRouter()
 

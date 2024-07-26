@@ -1,48 +1,20 @@
-package main
+package data
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
-	"github.com/arian-nj/site/back/internal/data"
 	"github.com/lib/pq"
 )
 
-type storage interface {
-	Init() error
-	InsertMovie(*data.Movie) error
-	GetMovieById(int64) (*data.Movie, error)
-	Update(movie *data.Movie) error
-	DeleteMovie(int64) error
-}
-
-type PostgresStorage struct {
+type MovieModel struct {
 	db *sql.DB
 }
 
-func NewPostgresStorage() (*PostgresStorage, error) {
-	connStr := "postgres://postgres:secret@localhost:5432/postgres?sslmode=disable"
-	conn, err := sql.Open("postgres", connStr)
-	if err != nil {
-		return &PostgresStorage{}, fmt.Errorf("unable to connect to database: %v", err)
-	}
-	// defer conn.Close(context.Background())
-
-	err = conn.Ping()
-	if err != nil {
-		return &PostgresStorage{}, err
-	}
-	return &PostgresStorage{
-		db: conn,
-	}, err
-}
-
-func (s *PostgresStorage) Init() error {
-	return s.CreateMovieTable()
-}
-
-func (s *PostgresStorage) CreateMovieTable() error {
+func (s *MovieModel) CreateTable() error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -57,7 +29,9 @@ func (s *PostgresStorage) CreateMovieTable() error {
 		version integer NOT NULL DEFAULT 1
 		);`
 
-	_, err = s.db.Exec(query)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	defer cancel()
+	_, err = s.db.ExecContext(ctx, query)
 	if err != nil {
 		return err
 	}
@@ -65,7 +39,7 @@ func (s *PostgresStorage) CreateMovieTable() error {
 	return err
 }
 
-func (s *PostgresStorage) InsertMovie(movie *data.Movie) error {
+func (s *MovieModel) Insert(movie *Movie) error {
 	fmt.Println("making ", movie.Title, " in db")
 	statment := `INSERT INTO movies 
 	(title,year,runtime,genres)
@@ -80,20 +54,22 @@ func (s *PostgresStorage) InsertMovie(movie *data.Movie) error {
 		pq.Array(movie.Genres),
 	}
 
-	return s.db.QueryRow(statment, args...).Scan(&movie.ID, &movie.CreatedAt, &movie.Version)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	defer cancel()
+	return s.db.QueryRowContext(ctx, statment, args...).Scan(&movie.ID, &movie.CreatedAt, &movie.Version)
 }
 
-func (s *PostgresStorage) GetMovieById(id int64) (*data.Movie, error) {
+func (s *MovieModel) Get(id int64) (*Movie, error) {
 	if id < 1 {
-		return nil, data.ErrRecordNotFound
+		return nil, ErrRecordNotFound
 	}
 	query := `
 	SELECT id, created_at, title, year, runtime, genres, version
 	FROM movies
 	WHERE id = $1`
-	var movie data.Movie
+	var movie Movie
 
-	err := s.db.QueryRow(query, id).Scan(
+	args := []interface{}{
 		&movie.ID,
 		&movie.CreatedAt,
 		&movie.Title,
@@ -101,11 +77,15 @@ func (s *PostgresStorage) GetMovieById(id int64) (*data.Movie, error) {
 		&movie.Runtime,
 		pq.Array(&movie.Genres),
 		&movie.Version,
-	)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	err := s.db.QueryRowContext(ctx, query, id).Scan(args...)
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
-			return nil, data.ErrRecordNotFound
+			return nil, ErrRecordNotFound
 		default:
 			return nil, err
 		}
@@ -114,12 +94,12 @@ func (s *PostgresStorage) GetMovieById(id int64) (*data.Movie, error) {
 	return &movie, nil
 }
 
-func (s *PostgresStorage) Update(movie *data.Movie) error {
+func (s *MovieModel) Update(movie *Movie) error {
 	query := `
 	UPDATE movies
 	SET title = $1, year = $2, runtime = $3, genres = $4, version =
 	version + 1
-	WHERE id = $5
+	WHERE id = $5 AND version=$6
 	RETURNING version`
 	args := []interface{}{
 		movie.Title,
@@ -127,20 +107,32 @@ func (s *PostgresStorage) Update(movie *data.Movie) error {
 		movie.Runtime,
 		pq.Array(movie.Genres),
 		movie.ID,
+		movie.Version,
 	}
 
-	return s.db.QueryRow(query, args...).Scan(&movie.Version)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	defer cancel()
+	err := s.db.QueryRowContext(ctx, query, args...).Scan(&movie.Version)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrEditConflict
+		}
+		return err
+	}
+	return nil
 }
 
-func (s *PostgresStorage) DeleteMovie(id int64) error {
+func (s *MovieModel) Delete(id int64) error {
 	if id < 1 {
-		return data.ErrRecordNotFound
+		return ErrRecordNotFound
 	}
 	query := `
 	DELETE FROM movies
 	WHERE id = $1`
 
-	result, err := s.db.Exec(query, id)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	defer cancel()
+	result, err := s.db.ExecContext(ctx, query, id)
 	if err != nil {
 		return err
 	}
@@ -151,7 +143,7 @@ func (s *PostgresStorage) DeleteMovie(id int64) error {
 	}
 
 	if rowsEffected == 0 {
-		return data.ErrRecordNotFound
+		return ErrRecordNotFound
 	}
 
 	return nil

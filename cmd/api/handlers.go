@@ -18,15 +18,14 @@ func (app *application) healthcheckHandler(w http.ResponseWriter, r *http.Reques
 	WriteJSON(w, http.StatusOK, data)
 }
 
-type inputMovie struct {
-	Title   string       `json:"title"`
-	Year    int32        `json:"year"`
-	Runtime data.Runtime `json:"runtime"`
-	Genres  []string     `json:"genres"`
-}
-
 func (app *application) createMovieHandler(w http.ResponseWriter, r *http.Request) {
-	var input inputMovie
+	var input struct {
+		Title   string       `json:"title"`
+		Year    int32        `json:"year"`
+		Runtime data.Runtime `json:"runtime"`
+		Genres  []string     `json:"genres"`
+	}
+
 	err := app.readJSON(w, r, &input)
 	if err != nil {
 		app.badRequestResponse(w, err)
@@ -47,7 +46,7 @@ func (app *application) createMovieHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	err = app.store.InsertMovie(movie)
+	err = app.models.Movie.Insert(movie)
 	if err != nil {
 		app.serverErrorResponse(w)
 		app.logger.Println(err)
@@ -66,9 +65,15 @@ func (app *application) getMovieHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	movie, err := app.store.GetMovieById(id)
+	movie, err := app.models.Movie.Get(id)
 	if err != nil {
-		app.notFoundResponse(w)
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w)
+		default:
+			app.serverErrorResponse(w)
+		}
+		app.logger.Println(err)
 		return
 	}
 
@@ -88,14 +93,14 @@ func readParamId(r *http.Request) (int64, error) {
 }
 
 func (app *application) updateMovieHandler(w http.ResponseWriter, r *http.Request) {
-	var input inputMovie
+
 	id, err := readParamId(r)
 	if err != nil {
 		app.CustomErrResponse(w, http.StatusBadGateway, err)
 		return
 	}
 
-	movie, err := app.store.GetMovieById(id)
+	movie, err := app.models.Movie.Get(id)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			app.notFoundResponse(w)
@@ -105,16 +110,31 @@ func (app *application) updateMovieHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	var input struct {
+		Title   *string       `json:"title"`
+		Year    *int32        `json:"year"`
+		Runtime *data.Runtime `json:"runtime"`
+		Genres  []string      `json:"genres"`
+	}
+
 	err = app.readJSON(w, r, &input)
 	if err != nil {
 		app.badRequestResponse(w, err)
 		return
 	}
 
-	movie.Title = input.Title
-	movie.Year = input.Year
-	movie.Runtime = input.Runtime
-	movie.Genres = input.Genres
+	if input.Title != nil {
+		movie.Title = *input.Title
+	}
+	if input.Year != nil {
+		movie.Year = *input.Year
+	}
+	if input.Runtime != nil {
+		movie.Runtime = *input.Runtime
+	}
+	if input.Genres != nil {
+		movie.Genres = input.Genres
+	}
 
 	v := validator.New()
 
@@ -124,10 +144,13 @@ func (app *application) updateMovieHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	err = app.store.Update(movie)
+	err = app.models.Movie.Update(movie)
 	if err != nil {
-		app.serverErrorResponse(w)
-		app.logger.Println(err)
+		if errors.Is(err, data.ErrEditConflict) {
+			app.editConflictResponse(w)
+		} else {
+			app.serverErrorResponse(w)
+		}
 		return
 	}
 
@@ -143,7 +166,7 @@ func (app *application) deleteMovieHandler(w http.ResponseWriter, r *http.Reques
 		app.CustomErrResponse(w, http.StatusNotFound, err)
 		return
 	}
-	err = app.store.DeleteMovie(id)
+	err = app.models.Movie.Delete(id)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			app.notFoundResponse(w)

@@ -23,3 +23,7 @@ func (app *application) badRequestResponse(w http.ResponseWriter, err error) {
 func (app *application) serverErrorResponse(w http.ResponseWriter) {
 	app.CustomErrResponse(w, http.StatusInternalServerError, errors.New("internal server error"))
 }
+
+func (app *application) editConflictResponse(w http.ResponseWriter) {
+	app.CustomErrResponse(w, http.StatusConflict, errors.New("unable to update the record due to an edit conflict, please try again"))
+}

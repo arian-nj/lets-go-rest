@@ -1,7 +1,6 @@
 package data
 
 import (
-	"errors"
 	"time"
 
 	"github.com/arian-nj/site/back/internal/validator"
@@ -16,20 +15,6 @@ type Movie struct {
 	Genres    []string  `json:"genres"  db:"genres"`
 	Version   int32     `json:"version"  db:"version"`
 }
-
-var (
-	ErrRecordNotFound = errors.New("record not found")
-)
-
-// func NewMovie(title string, year int32, runtime Runtime, genres []string) *Movie {
-// 	return &Movie{
-// 		Title:     title,
-// 		Year:      year,
-// 		Runtime:   runtime,
-// 		Genres:    genres,
-// 		CreatedAt: time.Now().UTC(),
-// 	}
-// }
 
 func ValidateMovie(v *validator.Validator, movie *Movie) {
 	v.Check(movie.Title != "", "title", "must be provided")
