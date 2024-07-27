@@ -206,13 +206,14 @@ func (app *application) listMovieHandler(w http.ResponseWriter, r *http.Request)
 		app.failedValidationResponse(w, v.Errors)
 		return
 	}
-	movies, err := app.models.Movie.GetAll(input.Title, input.Genres, input.Filters)
+	movies, metadata, err := app.models.Movie.GetAll(input.Title, input.Genres, input.Filters)
 	if err != nil {
 		app.serverErrorResponse(w)
+		app.logger.Println(err)
 		return
 	}
 
-	err = WriteJSON(w, http.StatusOK, movies)
+	err = WriteJSON(w, http.StatusOK, envelope{"metadata": metadata, "movies": movies})
 	if err != nil {
 		app.serverErrorResponse(w)
 	}
