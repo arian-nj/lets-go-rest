@@ -1,15 +1,21 @@
 package main
 
-import "net/http"
+import (
+	"net/http"
 
-func (app *application) makeRouter() *http.ServeMux {
-	router := http.NewServeMux()
+	"github.com/julienschmidt/httprouter"
+)
 
-	router.HandleFunc("GET /v1/healthcheck", app.healthcheckHandler)
-	router.HandleFunc("POST /v1/movies", app.createMovieHandler)
-	router.HandleFunc("GET /v1/movies/{id}", app.getMovieHandler)
-	router.HandleFunc("PATCH /v1/movies/{id}", app.updateMovieHandler)
-	router.HandleFunc("DELETE /v1/movies/{id}", app.deleteMovieHandler)
-	router.HandleFunc("GET /v1/movies", app.listMovieHandler)
-	return router
+func (app *application) makeRouter() http.Handler {
+	router := httprouter.New()
+	router.NotFound = http.HandlerFunc(app.notFoundResponse)
+	router.MethodNotAllowed = http.HandlerFunc(app.methodNotAllowed)
+
+	router.HandlerFunc(http.MethodGet, "/v1/healthcheck", app.healthcheckHandler)
+	router.HandlerFunc(http.MethodPost, "/v1/movies", app.createMovieHandler)
+	router.HandlerFunc(http.MethodGet, "/v1/movies/{id}", app.getMovieHandler)
+	router.HandlerFunc(http.MethodPatch, "/v1/movies/{id}", app.updateMovieHandler)
+	router.HandlerFunc(http.MethodDelete, "/v1/movies/{id}", app.deleteMovieHandler)
+	router.HandlerFunc(http.MethodGet, "/v1/movies", app.listMovieHandler)
+	return app.recoverPanic(app.rateLimit(router))
 }
