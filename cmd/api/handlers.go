@@ -15,7 +15,10 @@ func (app *application) healthcheckHandler(w http.ResponseWriter, r *http.Reques
 		"environment": app.config.env,
 		"version":     version,
 	}
-	WriteJSON(w, http.StatusOK, data)
+	err := WriteJSON(w, http.StatusOK, data)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
 }
 
 func (app *application) createMovieHandler(w http.ResponseWriter, r *http.Request) {

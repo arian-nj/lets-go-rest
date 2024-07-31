@@ -3,11 +3,8 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"fmt"
-	"log"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/arian-nj/site/back/internal/data"
 	"github.com/arian-nj/site/back/internal/jsonlog"
@@ -57,21 +54,10 @@ func main() {
 		app.logger.PrintFatal(err, nil)
 	}
 	app.models = models
+	app.logger.PrintInfo("database connection estblished", nil)
 
-	router := app.makeRouter()
-
-	srv := http.Server{
-		Addr:         fmt.Sprintf(":%d", app.config.port),
-		Handler:      router,
-		ErrorLog:     log.New(app.logger, "", cfg.port),
-		IdleTimeout:  time.Minute,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 30 * time.Second,
+	err = app.serve()
+	if err != nil {
+		app.logger.PrintFatal(err, nil)
 	}
-
-	app.logger.PrintInfo(fmt.Sprintf("starting %s server on %s", app.config.env, srv.Addr), nil)
-
-	err = srv.ListenAndServe()
-	app.logger.PrintFatal(err, nil)
-
 }
