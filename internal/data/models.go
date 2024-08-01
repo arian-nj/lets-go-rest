@@ -14,6 +14,7 @@ var (
 
 type Models struct {
 	Movie MovieModel
+	Users UserModel
 }
 
 func NewModels() (*Models, error) {
@@ -34,11 +35,10 @@ func NewModels() (*Models, error) {
 	}
 	return &Models{
 		Movie: MovieModel{
-			db: conn,
+			DB: conn,
+		},
+		Users: UserModel{
+			DB: conn,
 		},
 	}, err
-}
-
-func (s *MovieModel) Init() error {
-	return s.CreateTable()
 }

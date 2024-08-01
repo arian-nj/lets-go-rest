@@ -12,10 +12,14 @@ func (app *application) makeRouter() http.Handler {
 	router.MethodNotAllowed = http.HandlerFunc(app.methodNotAllowed)
 
 	router.HandlerFunc(http.MethodGet, "/v1/healthcheck", app.healthcheckHandler)
+	// movies
 	router.HandlerFunc(http.MethodPost, "/v1/movies", app.createMovieHandler)
 	router.HandlerFunc(http.MethodGet, "/v1/movies/{id}", app.getMovieHandler)
 	router.HandlerFunc(http.MethodPatch, "/v1/movies/{id}", app.updateMovieHandler)
 	router.HandlerFunc(http.MethodDelete, "/v1/movies/{id}", app.deleteMovieHandler)
 	router.HandlerFunc(http.MethodGet, "/v1/movies", app.listMovieHandler)
+	// user
+	router.HandlerFunc(http.MethodPost, "/v1/user", app.registerUserHandler)
+
 	return app.recoverPanic(app.rateLimit(router))
 }
