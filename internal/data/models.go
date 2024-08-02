@@ -15,6 +15,7 @@ var (
 type Models struct {
 	Movie MovieModel
 	Users UserModel
+	Token TokenModel
 }
 
 func NewModels() (*Models, error) {
@@ -38,6 +39,9 @@ func NewModels() (*Models, error) {
 			DB: conn,
 		},
 		Users: UserModel{
+			DB: conn,
+		},
+		Token: TokenModel{
 			DB: conn,
 		},
 	}, err

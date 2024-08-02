@@ -15,7 +15,7 @@ func (app *application) healthcheckHandler(w http.ResponseWriter, r *http.Reques
 		"environment": app.config.env,
 		"version":     version,
 	}
-	err := WriteJSON(w, http.StatusOK, data)
+	err := writeJSON(w, http.StatusOK, data)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
@@ -54,7 +54,7 @@ func (app *application) createMovieHandler(w http.ResponseWriter, r *http.Reques
 		app.serverErrorResponse(w, r, err)
 		return
 	}
-	err = WriteJSON(w, http.StatusOK, input)
+	err = writeJSON(w, http.StatusOK, input)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
@@ -78,7 +78,7 @@ func (app *application) getMovieHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	err = WriteJSON(w, http.StatusOK, envelope{"movie": movie})
+	err = writeJSON(w, http.StatusOK, envelope{"movie": movie})
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
@@ -155,7 +155,7 @@ func (app *application) updateMovieHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	err = WriteJSON(w, http.StatusOK, envelope{"movie": movie})
+	err = writeJSON(w, http.StatusOK, envelope{"movie": movie})
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
@@ -177,7 +177,7 @@ func (app *application) deleteMovieHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	err = WriteJSON(w, http.StatusOK, envelope{"message": "movie successfully deleted"})
+	err = writeJSON(w, http.StatusOK, envelope{"message": "movie successfully deleted"})
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
@@ -213,7 +213,7 @@ func (app *application) listMovieHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	err = WriteJSON(w, http.StatusOK, envelope{"metadata": metadata, "movies": movies})
+	err = writeJSON(w, http.StatusOK, envelope{"metadata": metadata, "movies": movies})
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}

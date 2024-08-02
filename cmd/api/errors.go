@@ -6,11 +6,11 @@ import (
 )
 
 func (app *application) CustomErrResponse(w http.ResponseWriter, status int, err error) {
-	WriteJSON(w, status, envelope{"error": err.Error()})
+	writeJSON(w, status, envelope{"error": err.Error()})
 }
 
 func (app *application) failedValidationResponse(w http.ResponseWriter, errors map[string]string) {
-	WriteJSON(w, http.StatusUnprocessableEntity, envelope{"error": errors})
+	writeJSON(w, http.StatusUnprocessableEntity, envelope{"error": errors})
 }
 
 func (app *application) notFoundResponse(w http.ResponseWriter, r *http.Request) {
@@ -34,4 +34,14 @@ func (app *application) editConflictResponse(w http.ResponseWriter) {
 
 func (app *application) toManyRequestsResponse(w http.ResponseWriter) {
 	app.CustomErrResponse(w, http.StatusConflict, errors.New("rate limit exceeded"))
+}
+func (app *application) invalidcredentialsResponse(w http.ResponseWriter, r *http.Request) {
+	message := "invalid authentication credentials"
+	app.CustomErrResponse(w, http.StatusUnauthorized, errors.New(message))
+}
+
+func (app *application) invalidAuthenticationTokenResponse(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("WWW-Authenticate", "Bearer")
+	message := "invalid or missing authentication token"
+	app.CustomErrResponse(w, http.StatusUnauthorized, errors.New(message))
 }

@@ -19,7 +19,10 @@ func (app *application) makeRouter() http.Handler {
 	router.HandlerFunc(http.MethodDelete, "/v1/movies/{id}", app.deleteMovieHandler)
 	router.HandlerFunc(http.MethodGet, "/v1/movies", app.listMovieHandler)
 	// user
-	router.HandlerFunc(http.MethodPost, "/v1/user", app.registerUserHandler)
+	router.HandlerFunc(http.MethodPost, "/v1/users", app.registerUserHandler)
+	router.HandlerFunc(http.MethodPut, "/v1/users/activated", app.activateUserHandler)
 
-	return app.recoverPanic(app.rateLimit(router))
+	router.HandlerFunc(http.MethodPut, "/v1/tokens/authentication", app.createAuthenticationTokenHandler)
+
+	return app.recoverPanic(app.rateLimit(app.authentication(router)))
 }
